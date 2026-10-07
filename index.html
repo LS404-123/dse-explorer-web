@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="按必修課題及 E2／E3 選修單元搜尋 2012–2026 HKDSE 物理 MC 及已分析長題，直接查看原卷截圖。">
+  <title>物理題目索引 · HKDSE</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23126d68'/%3E%3Cpath d='M10 33h9l7-20 12 38 8-18h8' fill='none' stroke='white' stroke-width='5'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+  <script src="vendor/supabase-2.117.2.js" defer></script>
+  <script src="private.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <a href="#search" class="skip">跳至搜尋</a>
+  <header class="masthead">
+    <a class="brand" href="index.html" aria-label="物理題目索引首頁"><span class="brand-mark" aria-hidden="true">φ</span><span><span class="brand-title">物理題目索引</span><small>HKDSE · 教師備課工作台</small></span></a>
+    <div class="header-right"><span class="offline"><span aria-hidden="true">●</span> 可離線使用</span><a href="unanalyzed.html" class="text-button">未分析題號</a><button id="coverage-button" class="text-button">收錄範圍與來源</button></div>
+  </header>
+  <main id="private-gate" class="private-gate"><h1>登入私人題庫</h1><p>題目、答案及使用紀錄只供獲授權帳戶存取。</p><button id="private-login" class="cloud-action" disabled>使用 GitHub 登入</button><button id="private-retry" class="text-button" hidden>重新讀取</button><button id="private-logout" class="text-button" hidden>登出此帳戶</button><p id="private-status" role="status">正在讀取登入狀態…</p></main>
+  <div id="private-document" hidden></div>
+  <div class="workspace" hidden>
+    <aside class="sidebar" id="sidebar" aria-label="課本與課題篩選">
+      <div class="sidebar-heading"><span>按課題找題</span></div>
+      <p class="sidebar-hint">選擇課本或選修單元，再找子課題</p>
+      <nav id="topics" aria-label="課題目錄"></nav>
+      <div class="sidebar-note"><span class="eyebrow">題庫收錄</span><strong id="library-count"></strong><p>2012–2026 必修 MC<br>選修 E2、E3：MC 及結構式題目。</p><p>各課題旁的數字會隨篩選更新。必修及 E2、E3 均可再選細分課題。</p></div>
+    </aside>
+    <main class="main">
+      <div class="desk">
+        <section class="toolbar" aria-label="搜尋與篩選">
+          <div class="search-wrap"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><label for="search" class="sr-only">搜尋年份、題號、課題或概念</label><input id="search" type="search" placeholder="搜尋課題、概念，或 2024 LQ 10" autocomplete="off"><kbd aria-hidden="true">/</kbd></div>
+          <div class="filters">
+            <div id="kind-filter" class="segmented" role="group" aria-label="題型"><button data-kind="MC" aria-pressed="true">MC 選擇題</button><button data-kind="LQ" aria-pressed="false">LQ 長題</button></div>
+            <label class="select-label">年份<select id="year"><option value="">全部年份</option></select></label>
+            <label class="select-label" id="difficulty-filter" hidden>長題難度<select id="difficulty"><option value="">全部難度</option><option>容易</option><option>中等</option><option>困難</option><option>資料不足</option></select></label>
+            <label class="select-label sort-label">排序<select id="sort"><option value="oldest">年份由舊到新</option><option value="newest">年份由新到舊</option><option value="rate-asc">答對率由低到高</option><option value="rate-desc">答對率由高到低</option><option value="difficulty-asc" hidden disabled>難度由容易到困難</option><option value="difficulty-desc" hidden disabled>難度由困難到容易</option></select></label>
+            <button id="reset" class="text-button filter-reset">清除篩選</button>
+          </div>
+          <div id="active-filters" class="active-filters" aria-label="目前篩選條件" hidden></div>
+          <div id="cloud-bar" class="cloud-bar" hidden><button id="cloud-button" class="text-button">登入同步</button><span id="cloud-status" role="status">登入後同步已使用紀錄</span></div>
+        </section>
+        <section class="results" id="question-results" aria-label="搜尋結果">
+          <div class="results-overview"><div class="results-heading"><div><span class="eyebrow">題目清單</span><h1 id="result-label">全部題目</h1></div><span id="result-count" role="status" aria-live="polite"></span></div><p id="result-summary" class="result-summary"></p></div>
+          <div id="question-list" class="question-list"></div>
+        </section>
+        <button id="list-toggle" class="list-handle" aria-expanded="true" aria-controls="question-results"><span>題目清單</span></button>
+        <section class="reader" id="reader" aria-label="題目詳情"><div id="detail"></div></section>
+      </div>
+    </main>
+  </div>
+  <dialog id="image-dialog" class="image-dialog" aria-labelledby="image-title" closedby="any"><div class="dialog-bar"><h2 id="image-title">原題截圖</h2><label>縮放 <select id="zoom"><option value="100">適合視窗</option><option value="150">150%</option><option value="200">200%</option></select></label><button data-close="image-dialog" class="close-button" aria-label="關閉放大截圖" autofocus>×</button></div><div id="zoom-scroll" class="zoom-scroll"><div id="zoom-images"></div></div></dialog>
+  <dialog id="coverage-dialog" aria-labelledby="coverage-title"><div class="dialog-bar"><h2 id="coverage-title">收錄範圍</h2><button data-close="coverage-dialog" class="close-button" aria-label="關閉收錄範圍">×</button></div><div id="coverage-content" class="coverage-content"></div></dialog>
+  <dialog id="cloud-dialog" aria-labelledby="cloud-title"><div class="dialog-bar"><h2 id="cloud-title">同步使用紀錄</h2><button data-close="cloud-dialog" class="close-button" aria-label="關閉同步設定">×</button></div><div class="cloud-content"><p>兩部裝置登入同一個獲授權的 GitHub 帳戶，即可共用已使用紀錄。</p><div id="cloud-login" hidden><button id="cloud-send" class="cloud-action" type="button">使用 GitHub 登入</button></div><div id="cloud-account" hidden><p id="cloud-user"></p><button id="cloud-refresh" class="cloud-action">重新讀取紀錄</button><button id="cloud-logout" class="text-button">登出</button></div><p id="cloud-login-message" role="status"></p></div></dialog>
+  <noscript>請啟用 JavaScript，才能搜尋本機題庫及查看截圖。</noscript>
+</body>
+</html>
