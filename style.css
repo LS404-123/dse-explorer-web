@@ -67,7 +67,7 @@ small { font-size: .75rem; }
 .book-button[aria-expanded]::after { content: ''; flex-shrink: 0; width: 6px; height: 6px; border-right: 1.5px solid; border-bottom: 1.5px solid; transform: rotate(-45deg); }
 .book-button[aria-expanded=true]::after { transform: rotate(45deg); }
 .book-number { font: .75rem Consolas, monospace; border: 1px solid #547273; border-radius: 3px; padding: 4px; color: #c3d5d2; }
-.count { font: .75rem Consolas, monospace; margin-left: auto; color: #bfd3d1; }
+.count { font: .75rem Consolas, monospace; margin-left: auto; color: #bfd3d1; flex-shrink: 0; white-space: nowrap; }
 .book-button.active { background: #d8ede3; color: #163f39; font-weight: 700; }
 .book-button.active .count, .book-button.active .book-number { color: #285b50; border-color: #a6cabc; }
 .book-button:not(.active):hover, .topic-button:not(.active):hover { background: #285154; }

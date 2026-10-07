@@ -59,10 +59,18 @@ function loadUsage() {
   }
 }
 
+function usageProgress(questions) {
+  const count = questions.filter(q => {
+    const keys = usageKeys(q);
+    return keys.length > 0 && keys.every(key => usedQuestions.has(key));
+  }).length;
+  return `${usageAvailable ? count : '—'}/${questions.length}`;
+}
+
 function usageSummary(q) {
   if (!usageAvailable) return '紀錄未能讀取';
   const keys = usageKeys(q), count = keys.filter(key => usedQuestions.has(key)).length;
-  return q.kind === 'MC' ? (count ? '已使用' : '未使用') : `已用 ${count}/${keys.length} 個已列分題`;
+  return `已用 ${usageProgress([q])} 題${q.kind === 'LQ' ? ` · 分題 ${count}/${keys.length}` : ''}`;
 }
 
 function usageCheckboxHTML(q, part, showPart = false) {
@@ -89,7 +97,15 @@ function syncUsage() {
     $('cloud-account').hidden = !cloudUser;
     $('cloud-user').textContent = cloudUser?.email || '';
   }
-  if (data) renderList();
+  if (data) {
+    const focused = document.activeElement;
+    const fromTopics = $('topics').contains(focused);
+    renderTopics(); renderList();
+    if (fromTopics) {
+      const selector = 'topic' in focused.dataset ? `[data-topic="${CSS.escape(focused.dataset.topic)}"][data-topic-book="${focused.dataset.topicBook}"]` : `[data-book="${focused.dataset.book}"]`;
+      $('topics').querySelector(selector)?.focus({preventScroll:true});
+    }
+  }
 }
 
 async function changeUsage(input) {
@@ -319,16 +335,16 @@ function readURL() {
 
 function renderTopics() {
   const base = selectQuestions(data.questions, {...state, book:'', topic:''});
-  const bookButton = (book, name, count) => `<button class="book-button ${state.book === book && !state.topic ? 'active' : ''}" data-book="${book}" aria-pressed="${state.book === book && !state.topic}" ${topicOrder[book] ? `aria-expanded="${state.book === book && collapsedBook !== book}"` : ''}>${book ? `<span class="book-number">${book.padStart(2,'0')}</span>` : ''}<span>${name}</span><span class="count">${count}</span></button>`;
-  let html = bookButton('', '全部課題', base.length);
+  const bookButton = (book, name, questions) => `<button class="book-button ${state.book === book && !state.topic ? 'active' : ''}" data-book="${book}" aria-pressed="${state.book === book && !state.topic}" ${topicOrder[book] ? `aria-expanded="${state.book === book && collapsedBook !== book}"` : ''}>${book ? `<span class="book-number">${book.padStart(2,'0')}</span>` : ''}<span>${name}</span><span class="count" title="已使用／總題數">${usageProgress(questions)}</span></button>`;
+  let html = bookButton('', '全部課題', base);
   for (const [book, name] of Object.entries(data.books)) {
     const questions = selectQuestions(base, {...state,book,topic:''});
-    html += bookButton(book, name, questions.length);
+    html += bookButton(book, name, questions);
     if (state.book !== book || !topicOrder[book]) continue;
     const groups = [...new Set(data.questions.filter(q => q.books.includes(book)).flatMap(q => questionTopics(q, book)))];
     const order = [...topicOrder[book],'測量與誤差','原表未填課題','未細分（僅大課題分類）'];
     groups.sort((a,b) => (order.includes(a)?order.indexOf(a):order.length) - (order.includes(b)?order.indexOf(b):order.length));
-    const topicButton = topic => `<button class="topic-button ${state.topic === topic ? 'active' : ''}" data-topic="${esc(topic)}" data-topic-book="${book}" aria-pressed="${state.topic === topic}"><span>${topic.startsWith('未細分') ? '僅大課題分類' : esc(topic)}</span><span class="count">${selectQuestions(questions,{...state,book,topic}).length}</span></button>`;
+    const topicButton = topic => `<button class="topic-button ${state.topic === topic ? 'active' : ''}" data-topic="${esc(topic)}" data-topic-book="${book}" aria-pressed="${state.topic === topic}"><span>${topic.startsWith('未細分') ? '僅大課題分類' : esc(topic)}</span><span class="count" title="已使用／總題數">${usageProgress(selectQuestions(questions,{...state,book,topic}))}</span></button>`;
     const sections = Object.entries(data.topicSections[book] || {});
     const sectionTopics = sections.flatMap(([,topics]) => topics);
     html += `<div class="topic-group" ${collapsedBook === book ? 'hidden' : ''}>` + sections.map(([section,topics],index) => {
@@ -342,12 +358,12 @@ function renderTopics() {
 }
 
 function questionCardHTML(q) {
-  return `<button class="question-card" data-question="${q.id}" aria-current="${q.id === state.question}" ${q.kind==='LQ'?`aria-describedby="difficulty-${q.id}"`: ''} aria-label="${q.year} ${paperLabel(q)}${q.kind} 第 ${q.label} 題：${esc(q.scenario)}"><div class="card-reference"><strong>${q.year}</strong>${q.paper===2?`<span>Paper 2 · ${q.elective}</span>`:''}<span class="type-label ${q.kind.toLowerCase()}">${q.kind}</span><span>Q${q.label}</span></div><div class="card-title">${emphasizePhysics(q.scenario)}</div>${difficultySummaryHTML(q)}<div class="usage-summary${usageAvailable && usageKeys(q).some(key=>usedQuestions.has(key)) ? ' is-used' : ''}">${esc(usageSummary(q))}</div><div class="card-bottom"><span class="card-topic">${esc(q.incomplete ? q.books.map(book=>data.books[book]).join(' · ') : questionTopics(q).join(' · '))}</span>${q.incomplete ? '<span class="pending-label">僅分類</span>' : q.kind === 'MC' ? `<span class="rate-label">答對率 ${rateHTML(q.rate)}</span>` : `<span class="rate-label">${q.details.length} 列分析</span>`}</div></button>`;
+  return `<button class="question-card" data-question="${q.id}" aria-current="${q.id === state.question}" ${q.kind==='LQ'?`aria-describedby="difficulty-${q.id}"`: ''} aria-label="${q.year} ${paperLabel(q)}${q.kind} 第 ${q.label} 題：${esc(q.scenario)}；${esc(usageSummary(q))}"><div class="card-reference"><strong>${q.year}</strong>${q.paper===2?`<span>Paper 2 · ${q.elective}</span>`:''}<span class="type-label ${q.kind.toLowerCase()}">${q.kind}</span><span>Q${q.label}</span></div><div class="card-title">${emphasizePhysics(q.scenario)}</div>${difficultySummaryHTML(q)}<div class="usage-summary${usageAvailable && usageKeys(q).some(key=>usedQuestions.has(key)) ? ' is-used' : ''}">${esc(usageSummary(q))}</div><div class="card-bottom"><span class="card-topic">${esc(q.incomplete ? q.books.map(book=>data.books[book]).join(' · ') : questionTopics(q).join(' · '))}</span>${q.incomplete ? '<span class="pending-label">僅分類</span>' : q.kind === 'MC' ? `<span class="rate-label">答對率 ${rateHTML(q.rate)}</span>` : `<span class="rate-label">${q.details.length} 列分析</span>`}</div></button>`;
 }
 
 function renderList() {
   $('result-label').textContent = `${state.kind} · ${state.topic || (state.book ? data.books[state.book] : '全部題目')}`;
-  $('result-count').textContent = `${filtered.length} 題`;
+  $('result-count').textContent = `${usageProgress(filtered)} 題`;
   const detailed = filtered.filter(q => !q.incomplete).length;
   $('result-summary').textContent = `${detailed} 題有詳細分析 · ${filtered.length-detailed} 題僅分類${state.sort.startsWith('rate-') ? '；未提供答對率的題目排最後。' : ''}${state.sort.startsWith('difficulty-') ? '；混合難度按相關分題最高已知難度歸組。' : state.kind==='LQ' ? '；難度標籤按目前課題的分題顯示。' : ''}`;
   const groups = new Map();

@@ -22,9 +22,9 @@
   <div class="workspace" hidden>
     <aside class="sidebar" id="sidebar" aria-label="課本與課題篩選">
       <div class="sidebar-heading"><span>按課題找題</span></div>
-      <p class="sidebar-hint">選擇課本或選修單元，再找子課題</p>
+      <p class="sidebar-hint">選擇課本或選修單元，再找子課題。<br>數字：已使用／總題數</p>
       <nav id="topics" aria-label="課題目錄"></nav>
-      <div class="sidebar-note"><span class="eyebrow">題庫收錄</span><strong id="library-count"></strong><p>2012–2026 必修 MC<br>選修 E2、E3：MC 及結構式題目。</p><p>各課題旁的數字會隨篩選更新。必修及 E2、E3 均可再選細分課題。</p></div>
+      <div class="sidebar-note"><span class="eyebrow">題庫收錄</span><strong id="library-count"></strong><p>2012–2026 必修 MC<br>選修 E2、E3：MC 及結構式題目。</p><p>已使用／總題數會隨篩選更新。長題全部已列分題用完才計作 1 題。必修及 E2、E3 均可再選細分課題。</p></div>
     </aside>
     <main class="main">
       <div class="desk">
@@ -41,7 +41,7 @@
           <div id="cloud-bar" class="cloud-bar" hidden><button id="cloud-button" class="text-button">登入同步</button><span id="cloud-status" role="status">登入後同步已使用紀錄</span></div>
         </section>
         <section class="results" id="question-results" aria-label="搜尋結果">
-          <div class="results-overview"><div class="results-heading"><div><span class="eyebrow">題目清單</span><h1 id="result-label">全部題目</h1></div><span id="result-count" role="status" aria-live="polite"></span></div><p id="result-summary" class="result-summary"></p></div>
+          <div class="results-overview"><div class="results-heading"><div><span class="eyebrow">題目清單</span><h1 id="result-label">全部題目</h1></div><span id="result-count" title="已使用／總題數" role="status" aria-live="polite"></span></div><p id="result-summary" class="result-summary"></p></div>
           <div id="question-list" class="question-list"></div>
         </section>
         <button id="list-toggle" class="list-handle" aria-expanded="true" aria-controls="question-results"><span>題目清單</span></button>
