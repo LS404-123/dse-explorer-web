@@ -476,7 +476,7 @@ function renderDetail() {
     <div id="scan-panel" role="tabpanel" aria-labelledby="scan-tab" tabindex="0" ${state.tab!=='scan'?'hidden':''}>
       <div class="reading-layout"><div class="question-paper">
       ${showingAnswer?`<h3 class="answer-heading">參考答案</h3>${q.kind==='MC'?`<div class="mc-model-answer">${q.answer?`<p>正確選項</p><strong>${esc(q.answer)}</strong>`:`<p>${q.status==='deleted'?'本試題已被官方刪去，不設答案。':'現有評卷參考未提供此題答案。'}</p>`}</div>`:''}`:''}
-      ${images.map((im,i)=>`<figure class="scan"><button data-expand aria-label="放大 ${q.year} ${paperLabel(q)}${q.kind} 第 ${q.label} 題${contentLabel}第 ${i+1} 張截圖"><img ${imageSource(im)} width="${im.width}" height="${im.height}" ${i?'loading="lazy"':''} alt="${q.year} 年 ${paperLabel(q)}${q.kind} 第 ${q.label} 題${contentLabel}截圖，PDF 第 ${im.page} 頁"></button><figcaption><span>${i+1} / ${images.length} · ${showingAnswer?'評卷參考':'原卷'} PDF 第 ${im.page} 頁</span><div class="scan-actions"><button class="copy-image" data-copy-image aria-label="複製第 ${i+1} 張${contentLabel}圖片">複製圖片</button><a href="${esc(im.href)}" target="_blank" rel="noopener">開啟此頁 ↗</a></div><span class="copy-status" role="status"></span></figcaption></figure>`).join('')}
+      ${images.map((im,i)=>`<figure class="scan"><button data-expand aria-label="放大 ${q.year} ${paperLabel(q)}${q.kind} 第 ${q.label} 題${contentLabel}第 ${i+1} 張截圖"><img ${imageSource(im)} width="${im.width}" height="${im.height}" ${i?'loading="lazy"':''} alt="${q.year} 年 ${paperLabel(q)}${q.kind} 第 ${q.label} 題${contentLabel}截圖，PDF 第 ${im.page} 頁"></button><figcaption><span>${i+1} / ${images.length} · ${showingAnswer?'評卷參考':'原卷'} PDF 第 ${im.page} 頁</span><div class="scan-actions">${!showingAnswer?`<button class="copy-image" data-copy-with-heading="${esc(heading)}" aria-label="複製標題及第 ${i+1} 張原題圖片">複製標題及圖片</button>`:''}<button class="copy-image" data-copy-image aria-label="複製第 ${i+1} 張${contentLabel}圖片">複製圖片</button><a href="${esc(im.href)}" target="_blank" rel="noopener">開啟此頁 ↗</a></div><span class="copy-status" role="status"></span></figcaption></figure>`).join('')}
       </div>${keyAnalysisHTML(q)}</div>
     </div>
     <div id="analysis-panel" role="tabpanel" aria-labelledby="analysis-tab" tabindex="0" ${state.tab!=='analysis'?'hidden':''}>${analysisHTML(q)}<p class="source-help">原卷及分析來源連結需要原有的「PHYS DSE」、「report」及「tutor」資料夾。${q.syllabusAnalysis?'分類採用中文修訂課程的正式小標題；缺少的官方資料留空。':'分析內容沿用收錄原表，未重新核對評卷參考。'}</p></div>`;
@@ -581,7 +581,7 @@ async function copyImageURL(src) {
   return window.DSE_COPY_IMAGES[name];
 }
 
-async function imagePNG(image) {
+async function copyCanvas(image) {
   const src = image.dataset.privateSrc || image.getAttribute('src');
   const url = await copyImageURL(src);
   const original = new Image();
@@ -618,7 +618,18 @@ async function imagePNG(image) {
   for (let i = 4; i < box.length; i += 4) {
     context.fillRect(box[i] - left, box[i+1] - top, box[i+2] - box[i], box[i+3] - box[i+1]);
   }
+  return canvas;
+}
+
+async function imagePNG(image) {
+  const canvas = await copyCanvas(image);
   return new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('圖片轉換失敗')),'image/png'));
+}
+
+async function headingAndImageHTML(image, heading) {
+  const canvas = await copyCanvas(image);
+  const html = `<p>${esc(heading)}</p><p><img src="${canvas.toDataURL('image/png')}" alt="物理題目"></p>`;
+  return new Blob([html], {type:'text/html'});
 }
 
 async function copyHeading(heading) {
@@ -634,15 +645,19 @@ async function copyHeading(heading) {
 async function copyImage(button) {
   const scan=button.closest('.scan');
   const status=scan.querySelector('.copy-status');
+  const heading=button.dataset.copyWithHeading;
   button.disabled=true; status.textContent='正在複製…';
   try {
     if (!navigator.clipboard?.write || !window.ClipboardItem) throw new Error('瀏覽器不支援圖片複製');
-    await navigator.clipboard.write([new ClipboardItem({'image/png':imagePNG(scan.querySelector('img'))})]);
-    status.textContent='已複製圖片，可以貼上。';
+    const image=scan.querySelector('img');
+    const formats=heading
+      ? {'text/html':headingAndImageHTML(image,heading),'text/plain':new Blob([heading],{type:'text/plain'})}
+      : {'image/png':imagePNG(image)};
+    await navigator.clipboard.write([new ClipboardItem(formats)]);
+    status.textContent=heading?'已複製標題及圖片，可以一次貼上。':'已複製圖片，可以貼上。';
   } catch (error) {
-    status.textContent=error.name==='NotAllowedError'
-      ? '瀏覽器未允許複製。請允許剪貼簿權限，或按右鍵複製完整原圖。'
-      : '未能複製圖片。請重試，或按右鍵複製完整原圖。';
+    const message=error.name==='NotAllowedError'?'瀏覽器未允許複製。請允許剪貼簿權限。':'未能複製圖片。請重試。';
+    status.textContent=message+(heading?'亦可分別複製標題和圖片。':'亦可按右鍵複製完整原圖。');
   } finally {button.disabled=false;}
 }
 
@@ -728,7 +743,7 @@ async function init() {
     }
     else if ('expand' in d) openImages();
     else if ('copyHeading' in d) copyHeading(d.copyHeading);
-    else if ('copyImage' in d) copyImage(button);
+    else if ('copyImage' in d || 'copyWithHeading' in d) copyImage(button);
     else if ('step' in d) chooseQuestion(filtered[filtered.findIndex(q=>q.id===state.question)+Number(d.step)]?.id);
     else if ('close' in d) $(d.close).close();
     else if ('reset' in d || button.id==='reset') updateFilters({...defaults,kind:state.kind,panel:state.panel});

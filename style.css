@@ -194,7 +194,7 @@ select { border: 1px solid var(--line); background: white; color: var(--ink); pa
 .scan > button:focus-visible { outline-offset: -3px; }
 .scan figcaption { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: space-between; padding: 10px 12px; border-top: 1px solid var(--line); font-size: .6875rem; color: var(--muted); background: #fbfcfc; }
 .scan figcaption a { white-space: nowrap; }
-.scan-actions { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+.scan-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-left: auto; }
 .copy-image { border: 1px solid #b7ceca; border-radius: 4px; padding: 6px 10px; background: white; color: var(--teal); font-size: .75rem; white-space: nowrap; }
 .copy-image:hover { background: var(--pale); }
 .copy-status { flex-basis: 100%; color: var(--teal); line-height: 1.7; }
