@@ -456,16 +456,20 @@ function renderDetail() {
   const index = filtered.indexOf(q);
   const images = showingAnswer ? q.answerImages : q.images;
   const contentLabel = showingAnswer ? '參考答案' : '原題';
+  const paper = q.paper === 2 ? '2' : (q.kind === 'MC' ? '1A' : '1B');
+  const heading = `HKDSE ${q.year} Paper ${paper} Q${q.label} (${q.rate == null ? 'N/A' : percent(q.rate)})`;
   $('detail').innerHTML = `
     <div class="detail-heading">
       <h2 class="detail-title" id="detail-title" tabindex="-1">${q.year} · ${paperLabel(q)}${q.kind} 第 ${q.label} 題</h2>
       <div class="reader-actions">
+        <button class="expand-button" data-copy-heading="${esc(heading)}">複製標題</button>
         ${q.kind==='MC' ? usageCheckboxHTML(q) : ''}
         <div class="question-nav"><span class="question-position">${index+1} / ${filtered.length}</span><button class="icon-button" data-step="-1" aria-label="上一題" ${index===0?'disabled':''}>‹<span> 上一題</span></button><button class="icon-button" data-step="1" aria-label="下一題" ${index===filtered.length-1?'disabled':''}><span>下一題 </span>›</button></div>
         <button class="expand-button answer-toggle" data-answer-toggle aria-pressed="${showingAnswer}" aria-controls="scan-panel">${showingAnswer?'顯示題目':'顯示答案'}</button>
         <a class="primary-link" href="${esc(q.images[0].href)}" target="_blank" rel="noopener">原卷 ↗</a>${images.length?`<button class="expand-button" data-expand>⤢ 放大${contentLabel}</button>`:''}
       </div>
     </div>
+    <div id="heading-copy-status" class="data-note" role="status"></div>
     <p id="usage-message" class="usage-note" role="status">${esc(usageNote())}</p>
     ${difficultyNotice}
     <div class="tab-bar"><div role="tablist" aria-label="題目內容"><button id="scan-tab" role="tab" aria-controls="scan-panel" data-tab="scan" aria-selected="${state.tab==='scan'}" tabindex="${state.tab==='scan'?0:-1}">原題與重點</button><button id="analysis-tab" role="tab" aria-controls="analysis-panel" data-tab="analysis" aria-selected="${state.tab==='analysis'}" tabindex="${state.tab==='analysis'?0:-1}">完整分析與來源</button></div></div>
@@ -592,6 +596,16 @@ async function imagePNG(image) {
   return new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('圖片轉換失敗')),'image/png'));
 }
 
+async function copyHeading(heading) {
+  const status = $('heading-copy-status');
+  try {
+    await navigator.clipboard.writeText(heading);
+    status.textContent = `已複製標題：${heading}`;
+  } catch {
+    status.textContent = `請手動複製標題：${heading}`;
+  }
+}
+
 async function copyImage(button) {
   const scan=button.closest('.scan');
   const status=scan.querySelector('.copy-status');
@@ -688,6 +702,7 @@ async function init() {
       document.querySelector('[data-answer-toggle]').focus({preventScroll:true});
     }
     else if ('expand' in d) openImages();
+    else if ('copyHeading' in d) copyHeading(d.copyHeading);
     else if ('copyImage' in d) copyImage(button);
     else if ('step' in d) chooseQuestion(filtered[filtered.findIndex(q=>q.id===state.question)+Number(d.step)]?.id);
     else if ('close' in d) $(d.close).close();
