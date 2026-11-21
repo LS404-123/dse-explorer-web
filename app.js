@@ -566,17 +566,8 @@ function chooseQuestion(id) {
   if(state.panel==='open') document.querySelector(`[data-question="${id}"]`)?.scrollIntoView({block:'nearest'});
 }
 
-async function imagePNG(image) {
-  if (hosted) {
-    const copy = new Image();
-    copy.src = await window.DSE_IMAGE_URL(image.dataset.privateSrc);
-    await copy.decode();
-    const canvas = document.createElement('canvas');
-    canvas.width = copy.naturalWidth; canvas.height = copy.naturalHeight;
-    canvas.getContext('2d').drawImage(copy,0,0);
-    return new Promise((resolve,reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('圖片轉換失敗')),'image/png'));
-  }
-  const src=image.getAttribute('src');
+async function copyImageURL(src) {
+  if (hosted) return window.DSE_IMAGE_URL(src);
   const name=src.split('/').pop();
   if (!window.DSE_COPY_IMAGES[name]) {
     await new Promise((resolve,reject)=>{
@@ -587,12 +578,46 @@ async function imagePNG(image) {
       document.head.append(script);
     });
   }
-  const copy=new Image();
-  copy.src=window.DSE_COPY_IMAGES[name] || '';
-  await copy.decode();
-  const canvas=document.createElement('canvas');
-  canvas.width=copy.naturalWidth; canvas.height=copy.naturalHeight;
-  canvas.getContext('2d').drawImage(copy,0,0);
+  return window.DSE_COPY_IMAGES[name];
+}
+
+async function imagePNG(image) {
+  const src = image.dataset.privateSrc || image.getAttribute('src');
+  const url = await copyImageURL(src);
+  const original = new Image();
+  original.src = url;
+  await original.decode();
+  const canvas = document.createElement('canvas');
+  let box = [0, 0, original.naturalWidth, original.naturalHeight];
+  let continuation;
+  if (src.startsWith('questions/') && src.includes('-MC-')) {
+    // Match the exact scan, so a replacement image never uses another scan's coordinates.
+    const bytes = await (await fetch(url)).arrayBuffer();
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
+    const key = Array.from(new Uint8Array(digest, 0, 12), byte => byte.toString(16).padStart(2, '0')).join('');
+    const layout = window.DSE_MC_COPY_CROPS[key];
+    if (!layout) throw new Error('未有此原圖的裁切範圍');
+    box = layout.box || layout;
+    continuation = layout.continuation;
+  }
+  const [left, top, right, bottom] = box;
+  canvas.width = right - left;
+  canvas.height = bottom - top;
+  const context = canvas.getContext('2d');
+  context.drawImage(original, -left, -top);
+  if (continuation) {
+    // The final option in 2019 Paper 2 Q3.3 continues in the next scan of the same page.
+    const next = new Image();
+    next.src = await copyImageURL(continuation.src);
+    await next.decode();
+    const height = bottom - continuation.at;
+    context.drawImage(next, left, continuation.from, canvas.width, height,
+      0, continuation.at - top, canvas.width, height);
+  }
+  context.fillStyle = 'white';
+  for (let i = 4; i < box.length; i += 4) {
+    context.fillRect(box[i] - left, box[i+1] - top, box[i+2] - box[i], box[i+3] - box[i+1]);
+  }
   return new Promise((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('圖片轉換失敗')),'image/png'));
 }
 
@@ -616,8 +641,8 @@ async function copyImage(button) {
     status.textContent='已複製圖片，可以貼上。';
   } catch (error) {
     status.textContent=error.name==='NotAllowedError'
-      ? '瀏覽器未允許複製。請允許剪貼簿權限，或在圖片上按右鍵選「複製圖片」。'
-      : '未能複製圖片。請重試，或在圖片上按右鍵選「複製圖片」。';
+      ? '瀏覽器未允許複製。請允許剪貼簿權限，或按右鍵複製完整原圖。'
+      : '未能複製圖片。請重試，或按右鍵複製完整原圖。';
   } finally {button.disabled=false;}
 }
 
