@@ -20,8 +20,8 @@ let usageAvailable = true;
 let usageMessage = '';
 const hosted = /^https?:$/.test(location.protocol);
 const cloud = hosted && window.DSE_CLOUD;
-let cloudUser = null;
-let cloudBusy = false;
+const savingUsage = new Set();
+let editsDuringRead = null;
 const manualDifficultyPrefix = 'dse-explorer:difficulty:';
 let manualDifficulties = new Map();
 let difficultyAvailable = true;
@@ -77,27 +77,29 @@ function usageCheckboxHTML(q, part, showPart = false) {
   const key = part == null ? q.id : `${q.id}:${part}`;
   const label = esc(`${q.year} ${paperLabel(q)}${q.kind} 第 ${q.label} 題${part == null ? '' : ' '+part} 已使用`);
   const text = part == null ? '已使用' : showPart ? esc(part) : '';
-  return `<label class="usage-toggle${part == null ? '' : ' usage-compact'}" title="${label}"><input type="checkbox" data-used="${esc(key)}" aria-label="${label}" ${usedQuestions.has(key) ? 'checked' : ''} ${usageAvailable && !cloudBusy ? '' : 'disabled'}>${text ? `<span>${text}</span>` : ''}</label>`;
+  return `<label class="usage-toggle${part == null ? '' : ' usage-compact'}" title="${label}"><input type="checkbox" data-used="${esc(key)}" aria-label="${label}" ${usedQuestions.has(key) ? 'checked' : ''} ${usageAvailable ? '' : 'disabled'}>${text ? `<span>${text}</span>` : ''}</label>`;
 }
 
 function usageNote() {
   return usageMessage || (hosted ? '使用紀錄儲存在雲端；長題按已列出的分題記錄。' : '使用紀錄儲存在此瀏覽器；長題按已列出的分題記錄。');
 }
 
-function syncUsage() {
+function syncUsage(updateLists = true) {
   document.querySelectorAll('input[data-used]').forEach(input => {
     input.checked = usedQuestions.has(input.dataset.used);
-    input.disabled = !usageAvailable || cloudBusy;
+    input.disabled = !usageAvailable;
   });
   if ($('usage-message')) $('usage-message').textContent = usageNote();
   if (hosted) {
+    const cloudUser = window.DSE_USER;
     $('cloud-button').textContent = cloudUser ? '同步設定' : '登入同步';
-    $('cloud-status').textContent = cloudBusy ? '正在同步…' : usageMessage || `雲端已使用 ${usedQuestions.size} 筆`;
+    $('cloud-status').setAttribute('aria-busy', String(savingUsage.size > 0 || editsDuringRead !== null));
+    $('cloud-status').textContent = savingUsage.size ? '正在儲存…' : editsDuringRead ? '正在同步…' : usageMessage || `雲端已使用 ${usedQuestions.size} 筆`;
     $('cloud-login').hidden = !!cloudUser;
     $('cloud-account').hidden = !cloudUser;
     $('cloud-user').textContent = cloudUser?.email || '';
   }
-  if (data) {
+  if (updateLists && data) {
     const focused = document.activeElement;
     const fromTopics = $('topics').contains(focused);
     renderTopics(); renderList();
@@ -108,33 +110,51 @@ function syncUsage() {
   }
 }
 
+function setUsed(keys, key, checked) {
+  if (checked) keys.add(key); else keys.delete(key);
+}
+
 async function changeUsage(input) {
   const key = input.dataset.used;
   if (hosted) {
-    if (!cloudUser || !usageAvailable || cloudBusy) { syncUsage(); return; }
-    const checked = input.checked;
-    const userId = cloudUser.id;
-    cloudBusy = true; syncUsage();
-    try {
-      const {error} = await cloud.from('question_usage').upsert({question_key:key, is_used:checked}, {onConflict:'question_key'});
-      if (error) throw error;
-      if (cloudUser?.id !== userId) return;
-      if (checked) usedQuestions.add(key); else usedQuestions.delete(key);
-      usageMessage = '';
-    } catch {
-      if (cloudUser?.id !== userId) return;
-      usageMessage = '未能儲存到雲端，這次勾選未有生效。請檢查網絡後再試。';
-    } finally {
-      cloudBusy = false; syncUsage();
+    const user = window.DSE_USER;
+    if (!user || !usageAvailable) { syncUsage(false); return; }
+    let confirmed = usedQuestions.has(key);
+    const alreadySaving = savingUsage.has(key);
+    setUsed(usedQuestions,key,input.checked);
+    editsDuringRead?.add(key);
+    savingUsage.add(key);
+    usageMessage = '';
+    syncUsage();
+    if (alreadySaving) return;
+
+    // One writer per question or part sends the latest choice after the preceding request settles.
+    let rolledBack = false;
+    while (window.DSE_USER === user) {
+      const requested = usedQuestions.has(key);
+      try {
+        const {error} = await cloud.from('question_usage').upsert({question_key:key, is_used:requested}, {onConflict:'question_key'});
+        if (error) throw error;
+        confirmed = requested;
+      } catch {
+        if (window.DSE_USER !== user) break;
+        if (usedQuestions.has(key) !== requested) continue;
+        setUsed(usedQuestions,key,confirmed);
+        usageMessage = '未能儲存到雲端，已還原上次儲存的狀態。請檢查網絡後再試。';
+        rolledBack = true;
+        break;
+      }
+      if (usedQuestions.has(key) === confirmed) break;
     }
+    savingUsage.delete(key);
+    if (window.DSE_USER === user) syncUsage(rolledBack);
     return;
   }
   try {
     // 每個分題獨立儲存，避免不同分頁的勾選互相覆蓋。
     if (input.checked) localStorage.setItem(usagePrefix + key, '1');
     else localStorage.removeItem(usagePrefix + key);
-    if (input.checked) usedQuestions.add(key);
-    else usedQuestions.delete(key);
+    setUsed(usedQuestions,key,input.checked);
     usageMessage = '';
   } catch {
     usageMessage = '未能儲存使用紀錄，這次勾選未有生效。請允許瀏覽器儲存資料後再試。';
@@ -143,27 +163,37 @@ async function changeUsage(input) {
 }
 
 async function refreshCloudUsage() {
-  if (!cloudUser || cloudBusy) return;
-  const userId = cloudUser.id;
-  cloudBusy = true; syncUsage();
+  const user = window.DSE_USER;
+  if (!user || editsDuringRead) return;
+  const edited = new Set(savingUsage);
+  editsDuringRead = edited;
+  syncUsage(false);
+  let changed = false;
   try {
     const records = [];
     for (let start = 0; ; start += 1000) {
       const {data:rows, error} = await cloud.from('question_usage').select('question_key,is_used').order('question_key').range(start,start+999);
+      if (window.DSE_USER !== user) return;
       if (error) throw error;
       records.push(...rows);
       if (rows.length < 1000) break;
     }
-    if (cloudUser?.id !== userId) return;
     const validKeys = new Set(data.questions.flatMap(usageKeys));
-    usedQuestions = new Set(records.filter(row => row.is_used && validKeys.has(row.question_key)).map(row => row.question_key));
-    usageAvailable = true; usageMessage = '';
+    const latest = new Set(records.filter(row => row.is_used && validKeys.has(row.question_key)).map(row => row.question_key));
+    // A background read may return a snapshot taken before a local write.
+    for (const key of edited) setUsed(latest,key,usedQuestions.has(key));
+    changed = !usageAvailable || latest.size !== usedQuestions.size || [...latest].some(key => !usedQuestions.has(key));
+    if (!usageAvailable || !edited.size) usageMessage = '';
+    usedQuestions = latest;
+    usageAvailable = true;
   } catch {
-    if (cloudUser?.id !== userId) return;
+    if (window.DSE_USER !== user || edited.size) return;
+    changed = usageAvailable;
     usageAvailable = false;
     usageMessage = '未能讀取雲端紀錄。請檢查網絡，並在同步設定中重新讀取。';
   } finally {
-    cloudBusy = false; syncUsage();
+    editsDuringRead = null;
+    if (window.DSE_USER === user) syncUsage(changed);
   }
 }
 
@@ -688,8 +718,7 @@ async function init() {
   if (!data?.questions?.length) { $('detail').innerHTML='<div class="empty"><strong>題庫資料未能載入</strong><p>請確認 data.js 與 index.html 放在同一資料夾，再重新開啟。</p></div>'; return; }
   if (hosted) {
     usageAvailable = false;
-    usageMessage = '登入後可讀取及勾選已使用紀錄。';
-    cloudUser = window.DSE_USER;
+    usageMessage = '正在讀取已使用紀錄…';
   } else { loadUsage(); }
   loadManualDifficulties();
   for (const q of data.questions) {

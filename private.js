@@ -53,6 +53,7 @@ window.DSE_READY = (async () => {
         document.querySelector('.header-right').hidden = true;
         $('private-document').replaceChildren();
         window.DSE_DATA = null;
+        window.DSE_USER = null;
         location.reload();
       }
     });
